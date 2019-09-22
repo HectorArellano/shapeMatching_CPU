@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head lang="en">
+    <meta charset="UTF-8">
+    <title>Position Based Shape Matching</title>
+</head>
+
+<style>
+    .container {
+        position: relative;
+        top: 0%;
+        left: 0%;
+        width: 100%;
+    }
+    .border {
+        border: solid 10px #0000ff;
+        position: absolute;
+        top: 250px;
+        left:250px;
+        width: 512px;
+        height: 512px;
+        border-radius: 256px;
+    }
+    .border2 {
+        border-right: solid 10px #0000ff;
+        position: absolute;
+        width: 1px;
+        height: 100vh;
+    }
+</style>
+<body>
+
+    <div class = "container">
+        <div class ="border"></div>
+        <div class = "border2"></div>
+    </div>
+
+</body>
+    <script src="js/gl-matrix.js"></script>
+    <script src="js/math.js"></script>
+    <script type="module" src="js/PBD_SoftBody.js"></script>
+</html>
