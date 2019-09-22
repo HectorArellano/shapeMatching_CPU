@@ -1,14 +1,26 @@
+
+/*
+Shape Matching for Position Based Dynamics
+based on the paper from Matthias Mueller:
+ http://matthias-mueller-fischer.ch/talks/2017-EG-CourseNotes.pdf
+ */
+
+
 import {Particle} from './Particle.js';
 
-let container = document.querySelector('.container');
-let radius = 6;
-let deltaTime = 0.06;
-let center = {x:64, y:64};
-let circleRadius = 64 * 0.494;
-let iterations = 30;
-let looping = true;
+const radius = 6; //Visual radius of the particles
+const deltaTime = 0.06; //speed of the simulation
+const center = {x:64, y:64}; //center of the border circle
+const circleRadius = 64 * 0.494; //radius of the circle
+const iterations = 30; //Number of iterations for the shape matching solver
+const gravity = 10;
+
 
 let shapes = [];
+let particles = [];
+let ii = 0;
+let container = document.querySelector('.container');
+let looping = true;
 
 
 function evaluateCenterOfMass(particles) {
@@ -36,12 +48,7 @@ The name in the shape and the particles is used to allocate the particles in the
 but most important it's used for collisions, where a single pool of particles will be used to define the neighborhood
 search for close collisions, the particles from the same shape shouldn't be evaluated for collisions (avoiding inner
 collisions).
- */
 
-let particles = [];
-let ii = 0;
-
-/*
 cx... center X
 cy... center Y
 stiffness... controls the soft body softness, the range goes from [0 - 1], values above 0.4 are advised.
@@ -50,13 +57,7 @@ stiffness... controls the soft body softness, the range goes from [0 - 1], value
 let shapeDefinition = [
     {radius: 7, cx: 50, cy: 50, stiffness: 0.3},
     {radius: 7, cx: 65, cy: 50, stiffness: 0.3},
-    {radius: 7, cx: 80, cy: 50, stiffness: 0.3},
-//    {radius: 7, cx: 50, cy: 65, stiffness: 0.3},
-//    {radius: 7, cx: 65, cy: 65, stiffness: 0.3},
-//    {radius: 7, cx: 80, cy: 65, stiffness: 0.3},
-//    {radius: 7, cx: 50, cy: 80, stiffness: 0.3},
-//    {radius: 7, cx: 65, cy: 80, stiffness: 0.3},
-//    {radius: 7, cx: 80, cy: 80, stiffness: 0.3}
+    {radius: 7, cx: 80, cy: 50, stiffness: 0.3}
 ]
 
 
@@ -64,6 +65,8 @@ let shapeDefinition = [
 for(let shapeDef of shapeDefinition) {
     particles = [];
 
+    //Generate the voxelized particles allocated into the shape / volume
+    //For a general mesh this should be generated using a voxelization process (meshes should be closed).
     for(let j = 0; j < 128; j ++) {
         for (let i = 0; i < 128; i++) {
             let r = Math.pow((i - shapeDef.cx), 2) + Math.pow((j - shapeDef.cy), 2);
@@ -74,6 +77,7 @@ for(let shapeDef of shapeDefinition) {
         }
     }
 
+    //actual shape, can be a regular mesh.
     for(let i = 0; i < 60; i ++) {
         const angle = 2 * Math.PI * i / 60;
         const r = shapeDef.radius;
@@ -282,8 +286,6 @@ let iterativeStep = (shape) => {
 let simulationStep = () => {
 
     if(looping) requestAnimationFrame(simulationStep);
-
-    let gravity = 10;
 
     for (let shape of shapes) {
 
