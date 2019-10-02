@@ -17,26 +17,24 @@ const gravity = 10;
 
 
 let shapes = [];
-let particles = [];
+let globalParticles = [];
 let ii = 0;
 let container = document.querySelector('.container');
 let looping = true;
 
-let voxels = [];
-let totalVoxels = 128 * 128;
-let globalParticles =[];
-for (let i = 0; i < totalVoxels; i++) voxels[i] = [];
-
-
 
 function evaluateCenterOfMass(particles) {
     let centerOfMass = {x: 0, y:0}
-    for(let particle of particles) {
+
+
+    for(let i = particles.initIndex; i <  particles.initIndex + particles.amountOfParticles; i ++) {
+        let particle = globalParticles[i];
         centerOfMass.x += particle.position.x;
         centerOfMass.y += particle.position.y;
     }
-    centerOfMass.x /= particles.length;
-    centerOfMass.y /= particles.length;
+
+    centerOfMass.x /= particles.amountOfParticles;
+    centerOfMass.y /= particles.amountOfParticles;
     return centerOfMass;
 }
 
@@ -44,10 +42,10 @@ let upperBorder = document.querySelector(".border2");
 upperBorder.x = 0;
 upperBorder.style.left = String(upperBorder.x).concat("px");
 
-//document.addEventListener("mousemove", (e) => {
-//    upperBorder.x = e.clientX;
-//    upperBorder.style.left = String(upperBorder.x).concat("px");
-//})
+document.addEventListener("mousemove", (e) => {
+    upperBorder.x = e.clientX;
+    upperBorder.style.left = String(upperBorder.x).concat("px");
+})
 
 /*
 The name in the shape and the particles is used to allocate the particles in the DOM (to place them in their positions),
@@ -67,9 +65,10 @@ let shapeDefinition = [
 ]
 
 
+let initIndex = 0;
+
 //create the particles and shapes.
 for(let shapeDef of shapeDefinition) {
-    particles = [];
 
     //Generate the voxelized particles allocated into the shape / volume
     //For a general mesh this should be generated using a voxelization process (meshes should be closed).
@@ -77,9 +76,8 @@ for(let shapeDef of shapeDefinition) {
         for (let i = 0; i < 128; i++) {
             let r = Math.pow((i - shapeDef.cx), 2) + Math.pow((j - shapeDef.cy), 2);
             if(r < shapeDef.radius * shapeDef.radius) {
-                let p = new Particle(`shape${ii}`, container, i, j, particles.length);
-                particles.push(p);
-                particles[particles.length - 1].radius(radius);
+                let p = new Particle(`shape${ii}`, container, i, j, globalParticles.length);
+                p.radius(radius);
                 globalParticles.push(p);
             }
         }
@@ -89,16 +87,24 @@ for(let shapeDef of shapeDefinition) {
     for(let i = 0; i < 60; i ++) {
         const angle = 2 * Math.PI * i / 60;
         const r = shapeDef.radius;
-        let p = new Particle(`shape${ii}`, container, r * Math.cos(angle) + shapeDef.cx, r * Math.sin(angle) + shapeDef.cy, particles.length);
-        particles.push(p);
-        particles[particles.length - 1].radius(radius);
+        let p = new Particle(`shape${ii}`, container, r * Math.cos(angle) + shapeDef.cx, r * Math.sin(angle) + shapeDef.cy, globalParticles.length);
+        p.radius(radius);
         globalParticles.push(p);
     }
 
-    shapes[ii] = {radius: Math.sqrt(90), name: `shape${ii}`, particles: [...particles], initialCenterOfMass: evaluateCenterOfMass(particles), stiffness: shapeDef.stiffness, centerOfMass: evaluateCenterOfMass(particles)}
+    let particles = {
+        initIndex: initIndex,
+        amountOfParticles: globalParticles.length - initIndex
+    }
+
+    initIndex = globalParticles.length;
+
+    shapes[ii] = {radius: Math.sqrt(90), name: `shape${ii}`, particles: particles, initialCenterOfMass: evaluateCenterOfMass(particles), stiffness: shapeDef.stiffness, centerOfMass: evaluateCenterOfMass(particles)}
 
     ii++;
 }
+
+console.log(shapes);
 
 //TODO this is precalculated should be saved in a texture. Should check if it's better to generate this in the CPU or the GPU
 //Evaluate the relative position for each particle relative to the center of mass to each shape
@@ -107,7 +113,8 @@ for(let shape of shapes) {
     //Evaluate Aqq for the linear extension
     let Aqq = mat2.fromValues(0, 0, 0, 0);
 
-    for(let particle of shape.particles) {
+    for(let i = shape.particles.initIndex; i < shape.particles.initIndex + shape.particles.amountOfParticles; i ++) {
+        let particle = globalParticles[i];
         particle.initialRelativePosition.x = particle.position.x - shape.initialCenterOfMass.x;
         particle.initialRelativePosition.y = particle.position.y - shape.initialCenterOfMass.y;
 
@@ -121,9 +128,6 @@ for(let shape of shapes) {
     shape.Aqq = Aqq;
 }
 
-particles = null;
-
-
 
 /*
  Collision evaluation between particles and borders
@@ -133,25 +137,31 @@ particles = null;
  - For the GPU a neighborhood search could be implemented  <<--- implies Harada sorting in buckets.
  */
 
-let evaluateCollisions = () => {
+let evaluateCollisions = (shape) => {
 
-    for(const particle of globalParticles) {
+    for(let j = shape.particles.initIndex; j < shape.particles.initIndex + shape.particles.amountOfParticles; j ++) {
 
-        const r = 0.5;
+        let particle = globalParticles[j];
 
-        //Grid search
-        for (let u = -1; u <= 1; u++) {
-            for (let w = -1; w <= 1; w++) {
+        const r = 0.7;
 
-                let index = Math.floor(particle.x) + u + 128 * (Math.floor(particle.y) + w);
+        //Collision among particles O(n2)
+        for (const c_shape of shapes) {
 
-                for(let v = 0; v < Math.min(voxels[index].length, 4); v ++) {
+            if (c_shape.name != particle.name) {
 
-                    let c_particle = globalParticles[voxels[index][v]];
+                let normal = {x: particle.position.x - c_shape.centerOfMass.x, y: particle.position.y - c_shape.centerOfMass.y}
+                let normalL = Math.sqrt(normal.x * normal.x + normal.y * normal.y);
 
-                    if(c_particle.name != particle.name) {
-                        let normal = {x: particle.position.x - c_particle.position.x, y: particle.position.y - c_particle.position.y}
-                        let normalL = Math.sqrt(normal.x * normal.x + normal.y * normal.y);
+                //There's a collision with the bounding shape (circle), should evaluate the inner particles.
+                if(normalL < 1.5 * c_shape.radius) {
+
+                    //Check the inner particles of the shape
+                    for(let i = c_shape.particles.initIndex; i < c_shape.particles.initIndex + c_shape.particles.amountOfParticles; i ++) {
+
+                        let c_particle = globalParticles[i];
+                        normal = {x: particle.position.x - c_particle.position.x, y: particle.position.y - c_particle.position.y}
+                        normalL = Math.sqrt(normal.x * normal.x + normal.y * normal.y);
 
                         //Move the particle to the outer radius of the two that are in contact.
                         if (normalL < 2 * r && normalL > 0) {
@@ -203,7 +213,9 @@ let generateShapeMatrix = shape => {
 
     //Evaluate the relative position for each particle relative to the center of mass O(n)
     let Apq = mat2.fromValues(0, 0, 0, 0);
-    for(let particle of shape.particles) {
+    for(let i = shape.particles.initIndex; i < shape.particles.initIndex + shape.particles.amountOfParticles; i ++) {
+
+        let particle = globalParticles[i];
         particle.relativePosition.x = particle.position.x - shape.centerOfMass.x;
         particle.relativePosition.y = particle.position.y - shape.centerOfMass.y;
 
@@ -257,7 +269,10 @@ let generateShapeMatrix = shape => {
 
 //Calculate the displacement for all the particles of the shape
 let updateParticlesIterationPositions = (shape, A) => {
-    for (let particle of shape.particles) {
+
+    for(let i = shape.particles.initIndex; i < shape.particles.initIndex + shape.particles.amountOfParticles; i ++) {
+
+        let particle = globalParticles[i];
         const d = particle.initialRelativePosition;
         let g = vec2.fromValues(d.x, d.y);
 
@@ -271,58 +286,60 @@ let updateParticlesIterationPositions = (shape, A) => {
 }
 
 
+
+let iterativeStep = (shape) => {
+
+    //TODO GPU this should be a draw call on a small texture that updates the data for the shapes CM
+    for(let shape of shapes) shape.centerOfMass = evaluateCenterOfMass(shape.particles); //<<<<<<<--------- O(n)
+
+
+    //TODO GPU possible bottleneck rendering all the particles from the shape.
+    evaluateCollisions(shape); //<<<<---------- O(n2)
+
+
+    //TODO GPU draw call to update the A matrix used to rotate
+    const A = generateShapeMatrix(shape); //<<<<<<<<<--------- O(n)
+
+
+    //TODO GPU draw call to update the iteration position of each particle
+    updateParticlesIterationPositions(shape, A);
+}
+
 let simulationStep = () => {
 
     if(looping) requestAnimationFrame(simulationStep);
 
+    for (let shape of shapes) {
 
-    //Calculate the predicted positions
-    for (let particle of globalParticles) {
-        particle.velocity.y += deltaTime * gravity;
-        particle.position.x += particle.velocity.x * deltaTime;
-        particle.position.y += particle.velocity.y * deltaTime;
-    }
+        //TODO GPU write a shader that updates the iteration positions for the step
+        for(let i = shape.particles.initIndex; i < shape.particles.initIndex + shape.particles.amountOfParticles; i ++) {
 
-    //Set the particles inside the voxels
-    for (let i = 0; i < totalVoxels; i++) voxels[i].length = 0;
-
-    //Allocate the particles in the corresponding voxels for space partitioning (neighbors)
-    for (let v = 0; v < globalParticles.length; v ++) {
-        let particle = globalParticles[v];
-        let index = Math.floor(particle.x) + 128 * Math.floor(particle.y);
-        if (index >= 0 && index < totalVoxels) voxels[index].push(v);
-    }
-
-    //Solve the iterative position constrain
-    for(let i = 0; i < iterations; i ++) {
-
-        //Evaluate collisions globally
-        evaluateCollisions();
-
-        //Make the shape matching
-        for(let shape of shapes) {
-
-            shape.centerOfMass = evaluateCenterOfMass(shape.particles);
-
-            const A = generateShapeMatrix(shape)
-
-            updateParticlesIterationPositions(shape, A);
+            let particle = globalParticles[i];
+            particle.velocity.y += deltaTime * gravity;
+            particle.position.x += particle.velocity.x * deltaTime;
+            particle.position.y += particle.velocity.y * deltaTime;
         }
 
+
+        //Solve the iterative position constrain
+        //TODO GPU write the corresponding draw calls for the iterative process.
+        for(let i = 0; i < iterations; i ++) iterativeStep(shape);
+
+
+
+        //TODO GPU write a shader that updates the final positions for the step
+        for(let i = shape.particles.initIndex; i < shape.particles.initIndex + shape.particles.amountOfParticles; i ++) {
+
+            let particle = globalParticles[i];
+            particle.x = particle.position.x;
+            particle.y = particle.position.y;
+
+            particle.velocity.x = (particle.x - particle.prevPosition.x) / deltaTime;
+            particle.velocity.y = (particle.y - particle.prevPosition.y) / deltaTime;
+
+            particle.update(particle.x, particle.y);
+        }
     }
-
-    //Update the positions of the particles
-    for (let particle of globalParticles) {
-
-        particle.x = particle.position.x;
-        particle.y = particle.position.y;
-
-        particle.velocity.x = (particle.x - particle.prevPosition.x) / deltaTime;
-        particle.velocity.y = (particle.y - particle.prevPosition.y) / deltaTime;
-
-        particle.update(particle.x, particle.y);
-    }
-
 }
 
 simulationStep();
