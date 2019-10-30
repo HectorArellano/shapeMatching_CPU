@@ -2,7 +2,7 @@
 
 class Particle {
 
-    constructor(name, container, x, y, id) {
+    constructor(name, container, x, y, id, angle) {
         this.constrain = 0;
         this.density = 0;
         this.lambda = 0;
@@ -18,7 +18,10 @@ class Particle {
         this.prevPosition = {x:this.x, y:this.y};
 
         this.displacement = {x:0, y:0};
-        this.velocity = {x:0, y:0}
+
+        const initialSpeed = 100;
+        this.velocity = {x: initialSpeed * Math.cos(angle), y: initialSpeed * Math.sin(angle)}
+
         this.colorSet = false;
         this.name = name;
         this.container = container;
@@ -29,20 +32,7 @@ class Particle {
         graphic.id = "particle_" + String(name + "_" + id);
         graphic.style.border = "#ff0000 1px solid";
         graphic.style.position = "absolute";
-//        graphic.style.cursor = "pointer";
-//        graphic.style.backgroundColor = "#ff0000";
 
-
-//        graphic.addEventListener("mouseover", () => {
-//            console.log("=================================");
-//            console.log("id: " + this.id);
-//            console.log("constrain: " + this.constrain);
-//            console.log("lambda: " + this.lambda);
-//            console.log("displacement: x=" + this.displacement.x + " y= " + this.displacement.y);
-//            console.log("velocity: x=" + this.velocity.x + " y= " + this.velocity.y);
-//            console.log("---------------------------------")
-//
-//        });
 
         container.appendChild(graphic);
 
@@ -62,8 +52,8 @@ class Particle {
         this.y = y;
 
         let graphic = document.querySelector("#" + this.id);
-        graphic.style.top = String(y * 8) + "px";
-        graphic.style.left = String(x * 8) + "px"
+        graphic.style.top = String(y) + "px";
+        graphic.style.left = String(x) + "px"
     }
 
     distance(particle) {

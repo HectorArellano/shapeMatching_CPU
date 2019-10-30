@@ -10,8 +10,6 @@ import {Particle} from './Particle.js';
 
 const radius = 6; //Visual radius of the particles
 const deltaTime = 0.06; //speed of the simulation
-const center = {x:64, y:64}; //center of the border circle
-const circleRadius = 64 * 0.494; //radius of the circle
 const iterations = 30; //Number of iterations for the shape matching solver
 const gravity = 10;
 
@@ -34,14 +32,6 @@ function evaluateCenterOfMass(particles) {
     return centerOfMass;
 }
 
-let upperBorder = document.querySelector(".border2");
-upperBorder.x = 0;
-upperBorder.style.left = String(upperBorder.x).concat("px");
-
-document.addEventListener("mousemove", (e) => {
-    upperBorder.x = e.clientX;
-    upperBorder.style.left = String(upperBorder.x).concat("px");
-})
 
 /*
 The name in the shape and the particles is used to allocate the particles in the DOM (to place them in their positions),
@@ -55,9 +45,7 @@ stiffness... controls the soft body softness, the range goes from [0 - 1], value
  */
 
 let shapeDefinition = [
-    {radius: 7, cx: 50, cy: 50, stiffness: 0.3},
-    {radius: 7, cx: 65, cy: 50, stiffness: 0.3},
-    {radius: 7, cx: 80, cy: 50, stiffness: 0.3}
+    {radius: 56, cx: window.innerWidth * 0.5, cy: window.innerHeight * 0.5, stiffness: 0.005}
 ]
 
 
@@ -65,23 +53,12 @@ let shapeDefinition = [
 for(let shapeDef of shapeDefinition) {
     particles = [];
 
-    //Generate the voxelized particles allocated into the shape / volume
-    //For a general mesh this should be generated using a voxelization process (meshes should be closed).
-    for(let j = 0; j < 128; j ++) {
-        for (let i = 0; i < 128; i++) {
-            let r = Math.pow((i - shapeDef.cx), 2) + Math.pow((j - shapeDef.cy), 2);
-            if(r < shapeDef.radius * shapeDef.radius) {
-                particles.push(new Particle(`shape${ii}`, container, i, j, particles.length));
-                particles[particles.length - 1].radius(radius);
-            }
-        }
-    }
-
     //actual shape, can be a regular mesh.
+    let velocityDirection = 2 * Math.PI * Math.random();
     for(let i = 0; i < 60; i ++) {
         const angle = 2 * Math.PI * i / 60;
         const r = shapeDef.radius;
-        particles.push(new Particle(`shape${ii}`, container, r * Math.cos(angle) + shapeDef.cx, r * Math.sin(angle) + shapeDef.cy, particles.length));
+        particles.push(new Particle(`shape${ii}`, document.body, r * Math.cos(angle) + shapeDef.cx, r * Math.sin(angle) + shapeDef.cy, particles.length, velocityDirection));
         particles[particles.length - 1].radius(radius);
     }
 
@@ -125,64 +102,62 @@ particles = null;
 
 let evaluateCollisions = (shape) => {
 
+    container.style.borderBottom = "solid 3px #0000ff";
+    container.style.borderTop = "solid 3px #0000ff";
+    container.style.borderLeft = "solid 3px #0000ff";
+    container.style.borderRight = "solid 3px #0000ff";
+
     for(const particle of shape.particles) {
 
-        const r = 0.7;
 
-        //Collision among particles O(n2)
-        for (const c_shape of shapes) {
+        const center = {x:window.innerWidth * 0.495, y: window.innerHeight * 0.495}; //center of the border box
 
-            if (c_shape.name != particle.name) {
+        //Collision on box
+        const boxSize = {x: window.innerWidth * 0.495, y: window.innerHeight * 0.495}
 
-                let normal = {x: particle.position.x - c_shape.centerOfMass.x, y: particle.position.y - c_shape.centerOfMass.y}
-                let normalL = Math.sqrt(normal.x * normal.x + normal.y * normal.y);
+        const xLocal = {x: particle.position.x - center.x, y: particle.position.y - center.y}
 
-                //There's a collision with the bounding shape (circle), should evaluate the inner particles.
-                if(normalL < 1.5 * c_shape.radius) {
+        const contactLocalPoint = {x: Math.min(Math.max(xLocal.x, - boxSize.x), boxSize.x),
+                                 y: Math.min(Math.max(xLocal.y, - boxSize.y), boxSize.y)}
 
-                    //Check the inner particles of the shape
-                    for (const c_particle of c_shape.particles) {
+        const contactPoint = {x: contactLocalPoint.x + center.x, y: contactLocalPoint.y + center.y}
 
-                        normal = {x: particle.position.x - c_particle.position.x, y: particle.position.y - c_particle.position.y}
-                        normalL = Math.sqrt(normal.x * normal.x + normal.y * normal.y);
+        const vector = {x: contactPoint.x - particle.position.x, y: contactPoint.y - particle.position.y}
+        const dist = Math.sqrt(vector.x * vector.x + vector.y * vector.y);
 
-                        //Move the particle to the outer radius of the two that are in contact.
-                        if (normalL < 2 * r && normalL > 0) {
+        if(dist > 0.) {
 
-                            normal.x /= normalL;
-                            normal.y /= normalL;
+            particle.position.x = contactPoint.x;
+            particle.position.y = contactPoint.y;
 
-                            particle.position.x += r * normal.x;
-                            particle.position.y += r * normal.y;
+            let normal = {x: 0, y: 0}
 
-                            //TODO check how to deal with the symmetry in the GPU
-                            c_particle.position.x -= r * normal.x;
-                            c_particle.position.y -= r * normal.y;
-                        }
-                    }
-                }
+            //Touches the left wall
+            if(particle.position.x == 0 && particle.position.y > 0) {
+                normal.x = 1;
+                container.style.borderLeft = "solid 3px #ff0000";
             }
+
+            //Touches the right wall
+            if(particle.position.x == 2 * window.innerWidth * 0.495 && particle.position.y > 0) {
+                normal.x = -1;
+                container.style.borderRight = "solid 3px #ff0000";
+            }
+
+            //Touches the lower wall
+            if(particle.position.x > 0 && particle.position.y == 0) {
+                normal.y = -1;
+                container.style.borderTop = "solid 3px #ff0000";
+            }
+
+            //Touched the upper wall
+            if(particle.position.x > 0 && particle.position.y == 2 * window.innerHeight * 0.495) {
+                normal.y = 1;
+                container.style.borderBottom = "solid 3px #ff0000";
+            }
+
         }
 
-        let normal = {x: particle.position.x - center.x, y: particle.position.y - center.y}
-        let normalL = Math.sqrt(normal.x * normal.x + normal.y * normal.y);
-        var dist = normalL - circleRadius;
-        var lMax = 0.0001;
-        if (dist > 0.) {
-            normal.x /= normalL;
-            normal.y /= normalL;
-            var cP = {x: center.x + circleRadius * normal.x, y: center.y + circleRadius * normal.y}
-            particle.position.x = cP.x - lMax * normal.x;
-            particle.position.y = cP.y - lMax * normal.y;
-            particle.prevPosition.x = particle.position.x;
-            particle.prevPosition.y = particle.position.y;
-        }
-
-
-        if (particle.position.x < (upperBorder.x + 20) / 8) {
-            particle.position.x = (upperBorder.x + 20) / 8;
-            particle.prevPosition.x = particle.position.x;
-        }
     }
 }
 
@@ -240,7 +215,7 @@ let generateShapeMatrix = shape => {
     detA = Math.pow(detA, 1/ 3);
     mat2.multiplyScalar(A, A, detA);
 
-    const beta = 0.5;
+    const beta = 0.2;
     mat2.add(A, mat2.multiplyScalar(A, A, beta), mat2.multiplyScalar(R, R, 1 - beta));
 
     return A;
@@ -267,19 +242,15 @@ let updateParticlesIterationPositions = (shape, A) => {
 
 let iterativeStep = (shape) => {
 
-    //TODO GPU this should be a draw call on a small texture that updates the data for the shapes CM
     for(let shape of shapes) shape.centerOfMass = evaluateCenterOfMass(shape.particles); //<<<<<<<--------- O(n)
 
 
-    //TODO GPU possible bottleneck rendering all the particles from the shape.
     evaluateCollisions(shape); //<<<<---------- O(n2)
 
 
-    //TODO GPU draw call to update the A matrix used to rotate
     const A = generateShapeMatrix(shape); //<<<<<<<<<--------- O(n)
 
 
-    //TODO GPU draw call to update the iteration position of each particle
     updateParticlesIterationPositions(shape, A);
 }
 
@@ -289,21 +260,16 @@ let simulationStep = () => {
 
     for (let shape of shapes) {
 
-        //TODO GPU write a shader that updates the iteration positions for the step
         for(let particle of shape.particles) {
-            particle.velocity.y += deltaTime * gravity;
+//            particle.velocity.y += deltaTime * gravity;
             particle.position.x += particle.velocity.x * deltaTime;
             particle.position.y += particle.velocity.y * deltaTime;
         }
 
-
         //Solve the iterative position constrain
-        //TODO GPU write the corresponding draw calls for the iterative process.
         for(let i = 0; i < iterations; i ++) iterativeStep(shape);
 
 
-
-        //TODO GPU write a shader that updates the final positions for the step
         for(let particle of shape.particles) {
 
             particle.x = particle.position.x;
