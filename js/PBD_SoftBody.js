@@ -17,8 +17,16 @@ const gravity = 10;
 let shapes = [];
 let particles = [];
 let ii = 0;
+
 let container = document.querySelector('.container');
+let canvas = document.querySelector(".drawingCanvas");
+let context = canvas.getContext("2d");
+
+
 let looping = true;
+
+let collisionState = false;
+let prevCollisionState = false;
 
 
 function evaluateCenterOfMass(particles) {
@@ -45,7 +53,7 @@ stiffness... controls the soft body softness, the range goes from [0 - 1], value
  */
 
 let shapeDefinition = [
-    {radius: 56, cx: window.innerWidth * 0.5, cy: window.innerHeight * 0.5, stiffness: 0.005}
+    {radius: 120, cx: window.innerWidth * 0.5, cy: window.innerHeight * 0.5, stiffness: 0.005}
 ]
 
 
@@ -55,14 +63,22 @@ for(let shapeDef of shapeDefinition) {
 
     //actual shape, can be a regular mesh.
     let velocityDirection = 2 * Math.PI * Math.random();
-    for(let i = 0; i < 60; i ++) {
-        const angle = 2 * Math.PI * i / 60;
+    const amountOfParticles = 100;
+    for(let i = 0; i < amountOfParticles; i ++) {
+        const angle = 2 * Math.PI * i / amountOfParticles;
         const r = shapeDef.radius;
         particles.push(new Particle(`shape${ii}`, document.body, r * Math.cos(angle) + shapeDef.cx, r * Math.sin(angle) + shapeDef.cy, particles.length, velocityDirection));
         particles[particles.length - 1].radius(radius);
     }
 
-    shapes[ii] = {radius: Math.sqrt(90), name: `shape${ii}`, particles: [...particles], initialCenterOfMass: evaluateCenterOfMass(particles), stiffness: shapeDef.stiffness, centerOfMass: evaluateCenterOfMass(particles)}
+    shapes[ii] = {
+                  name: `shape${ii}`,
+                  particles: [...particles],
+                  stiffness: shapeDef.stiffness,
+                  initialCenterOfMass: evaluateCenterOfMass(particles),
+                  centerOfMass: evaluateCenterOfMass(particles),
+                  prevCenterOfMass: evaluateCenterOfMass(particles)
+                }
 
     ii++;
 }
@@ -102,18 +118,13 @@ particles = null;
 
 let evaluateCollisions = (shape) => {
 
-    container.style.borderBottom = "solid 3px #0000ff";
-    container.style.borderTop = "solid 3px #0000ff";
-    container.style.borderLeft = "solid 3px #0000ff";
-    container.style.borderRight = "solid 3px #0000ff";
-
     for(const particle of shape.particles) {
 
 
-        const center = {x:window.innerWidth * 0.495, y: window.innerHeight * 0.495}; //center of the border box
+        const center = {x:window.innerWidth * 0.4999, y: window.innerHeight * 0.4999}; //center of the border box
 
         //Collision on box
-        const boxSize = {x: window.innerWidth * 0.495, y: window.innerHeight * 0.495}
+        const boxSize = {x: window.innerWidth * 0.4999, y: window.innerHeight * 0.4999}
 
         const xLocal = {x: particle.position.x - center.x, y: particle.position.y - center.y}
 
@@ -130,30 +141,33 @@ let evaluateCollisions = (shape) => {
             particle.position.x = contactPoint.x;
             particle.position.y = contactPoint.y;
 
-            let normal = {x: 0, y: 0}
 
             //Touches the left wall
             if(particle.position.x == 0 && particle.position.y > 0) {
-                normal.x = 1;
                 container.style.borderLeft = "solid 3px #ff0000";
+                collisionState = true;
+
             }
 
             //Touches the right wall
-            if(particle.position.x == 2 * window.innerWidth * 0.495 && particle.position.y > 0) {
-                normal.x = -1;
+            if(particle.position.x == 2 * window.innerWidth * 0.4999 && particle.position.y > 0) {
                 container.style.borderRight = "solid 3px #ff0000";
+                collisionState = true;
+
             }
 
             //Touches the lower wall
             if(particle.position.x > 0 && particle.position.y == 0) {
-                normal.y = -1;
                 container.style.borderTop = "solid 3px #ff0000";
+                collisionState = true;
+
             }
 
             //Touched the upper wall
-            if(particle.position.x > 0 && particle.position.y == 2 * window.innerHeight * 0.495) {
-                normal.y = 1;
+            if(particle.position.x > 0 && particle.position.y == 2 * window.innerHeight * 0.4999) {
                 container.style.borderBottom = "solid 3px #ff0000";
+                collisionState = true;
+
             }
 
         }
@@ -254,17 +268,52 @@ let iterativeStep = (shape) => {
     updateParticlesIterationPositions(shape, A);
 }
 
+
+
+
+
 let simulationStep = () => {
 
     if(looping) requestAnimationFrame(simulationStep);
 
+    let accelerate = false;
+
+    //End of collision should accelerate the ball
+    if(!collisionState && prevCollisionState) {
+        accelerate = true;
+    }
+
+    container.style.borderBottom = "solid 3px #0000ff";
+    container.style.borderTop = "solid 3px #0000ff";
+    container.style.borderLeft = "solid 3px #0000ff";
+    container.style.borderRight = "solid 3px #0000ff";
+
+    prevCollisionState = collisionState;
+    collisionState = false;
+
+
     for (let shape of shapes) {
 
+        let vel = {x: (shape.centerOfMass.x - shape.prevCenterOfMass.x ) / deltaTime, y: (shape.centerOfMass.y - shape.prevCenterOfMass.y ) / deltaTime}
+        const speed = Math.sqrt(vel.x * vel.x + vel.y * vel.y);
+        if(speed > 0) {
+            vel.x /= speed;
+            vel.y /= speed;
+        }
+
         for(let particle of shape.particles) {
-//            particle.velocity.y += deltaTime * gravity;
+
+            if(accelerate) {
+                particle.velocity.x += 100 * vel.x + 20 * Math.random();
+                particle.velocity.y += 100 * vel.y + 20 * Math.random();
+            }
+
             particle.position.x += particle.velocity.x * deltaTime;
             particle.position.y += particle.velocity.y * deltaTime;
         }
+
+        shape.prevCenterOfMass.x = shape.centerOfMass.x;
+        shape.prevCenterOfMass.y = shape.centerOfMass.y;
 
         //Solve the iterative position constrain
         for(let i = 0; i < iterations; i ++) iterativeStep(shape);
@@ -281,16 +330,27 @@ let simulationStep = () => {
             particle.update(particle.x, particle.y);
         }
     }
+
+    //Update the canvas
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    context.fillStyle = "#f75a5d";
+
+    context.beginPath();
+    context.moveTo(shapes[0].particles[0].position.x, shapes[0].particles[0].position.y);
+
+    for(let particle of shapes[0].particles) {
+
+        context.lineTo(particle.position.x, particle.position.y);
+
+    }
+
+    context.closePath();
+    context.fill();
+
 }
 
 simulationStep();
 
-document.body.addEventListener("click", () => {
-        looping = !looping;
-        if(looping) simulationStep();
-    }
-);
-
-document.body.addEventListener('keypress', (e) => {
-    if(e.key == "n" && !looping) simulationStep();
-});

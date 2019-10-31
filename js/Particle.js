@@ -34,7 +34,7 @@ class Particle {
         graphic.style.position = "absolute";
 
 
-        container.appendChild(graphic);
+//        container.appendChild(graphic);
 
         this.radius(4);
         this.update(this.x, this.y);
@@ -51,9 +51,9 @@ class Particle {
         this.x = x;
         this.y = y;
 
-        let graphic = document.querySelector("#" + this.id);
-        graphic.style.top = String(y) + "px";
-        graphic.style.left = String(x) + "px"
+//        let graphic = document.querySelector("#" + this.id);
+//        graphic.style.top = String(y) + "px";
+//        graphic.style.left = String(x) + "px"
     }
 
     distance(particle) {
@@ -64,10 +64,10 @@ class Particle {
 
     radius(m) {
         let r = m - 1;
-        let graphic = document.querySelector("#" + this.id);
-        graphic.style.width = String(r) + "px";
-        graphic.style.height = String(r) + "px";
-        graphic.style.borderRadius = String(r) + "px";
+//        let graphic = document.querySelector("#" + this.id);
+//        graphic.style.width = String(r) + "px";
+//        graphic.style.height = String(r) + "px";
+//        graphic.style.borderRadius = String(r) + "px";
     }
 
 }
